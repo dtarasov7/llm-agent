@@ -1,0 +1,38 @@
+@startuml
+title Coding Agent 1.2.0 - Static validation selection and dispatch
+start
+:Inspect changed paths and text shebangs;
+if (Bash shebang or .sh without POSIX sh shebang?) then (yes)
+  :Recommend bash_syntax, then shellcheck;
+elseif (POSIX sh shebang?) then (yes)
+  :Recommend shellcheck only;
+elseif (Recognized playbook or file inside an Ansible role?) then (yes)
+  :Use playbook path or owning role directory;
+  :Recommend ansible_syntax, then ansible_lint;
+else (unrelated file)
+  :No automatic static recommendation;
+  stop
+endif
+:Receive semantic run_check name + relative targets;
+if (Secure target validation succeeds?) then (no)
+  :Return INVALID_TARGET without execution;
+  stop
+else (yes)
+  if (Trusted checker installed?) then (no)
+    :Return SKIPPED; never install dependencies;
+    stop
+  else (yes)
+    :Build fixed argv; role syntax uses private wrapper;
+    :Execute through SandboxRunner in a fresh snapshot;
+    :Preserve diagnostics and exact check status;
+    note right
+      bash -n and Ansible syntax: separate runs per target
+      ShellCheck: one process for validated files, no -x
+      Ansible: synthetic inventory, controlled config, offline lint
+      SKIPPED and SANDBOX_ERROR never mean PASS
+      Static results do not prove runtime or converge correctness
+    end note
+  endif
+endif
+stop
+@enduml

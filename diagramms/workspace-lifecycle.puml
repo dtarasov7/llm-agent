@@ -1,0 +1,63 @@
+@startuml
+title Coding Agent 1.2.0 - Workspace and publication lifecycle
+actor "User" as user
+participant "REPL" as cli
+participant "WorkspaceManager" as wm
+database "Original project" as original
+database "Initial baseline" as baseline
+database "Agent copy" as copy
+database "Private state / backups" as state
+user -> cli : start with --workspace
+cli -> wm : inspect last saved task for this original
+alt matching session has unapplied edits and no --new-session
+  wm -> state : validate session manifest and task pointer
+  wm -> copy : reattach saved writable copy
+  wm --> user : RESUMED; pending files available to /apply
+else fresh session
+  wm -> original : read safe bounded tree
+  wm -> baseline : copy and record initial hashes
+  wm -> copy : create independent writable copy
+  wm -> state : save session manifest
+end
+user -> cli : natural-language task
+cli -> copy : edits through Agent / ToolRegistry
+user -> cli : /diff
+cli -> copy : compare with task originals
+copy --> user : current-task diff
+opt /diff --session
+  cli -> wm : diff()
+  wm -> baseline : read initial content
+  wm -> copy : read current content
+  wm --> user : session-baseline diff
+end
+user -> cli : /apply
+cli -> wm : apply(confirm)
+wm -> original : compare last-applied source hashes
+alt external conflict or deletion
+  wm --> user : reject before publication
+else safe pending files
+  wm --> user : pending file summary + line counts
+  user --> wm : explicit y / default rejection
+  alt approved
+    wm -> original : revalidate source hashes
+    wm -> state : original backups + apply journal
+    loop each pending file
+      wm -> original : atomic publish after per-file conflict check
+      wm -> state : update last-applied source hash
+    end
+    wm --> user : applied paths and backup directory
+  else rejected
+    wm --> user : original unchanged
+  end
+end
+user -> cli : /revert
+cli -> wm : revert()
+wm -> baseline : read initial session tree
+wm -> copy : staged replacement of entire copy
+wm --> user : original unchanged; already-applied writes remain
+user -> cli : /discard
+cli -> wm : discard(confirm)
+wm --> user : confirm if unapplied changes exist
+wm -> state : delete this session after approval if required
+cli --> user : exit after successful discard
+@enduml

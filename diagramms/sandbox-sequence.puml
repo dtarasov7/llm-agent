@@ -1,0 +1,48 @@
+@startuml
+title Coding Agent - Sandbox check lifecycle
+participant "ToolRegistry / StaticChecks" as tools
+participant "SandboxRunner" as runner
+participant "SnapshotManager" as snapshots
+participant "ResourceController" as resources
+participant "Portable / strict host gate" as gate
+participant "bubblewrap / inner gate" as bwrap
+participant "Checker + project plugins" as checker
+tools -> runner : approved argv + timeout
+runner -> runner : verify selected mode prerequisites
+alt isolation unavailable
+  runner --> tools : SANDBOX_ERROR / CHECK_NOT_RUN
+else prerequisites available
+  runner -> snapshots : create disposable project copy
+  snapshots --> runner : private snapshot path
+  alt portable (default)
+    runner -> gate : clean Python -I -S process
+    gate -> gate : no_new_privs + per-process rlimits
+  else strict
+    runner -> resources : sanitized systemd user service
+    resources -> gate : fixed Python -I -S launcher
+    gate -> gate : verify cgroup limits + no_new_privs
+  end
+  gate -> bwrap : private namespaces, read-only system mounts
+  note right of bwrap
+    Private PID, user, network, HOME and /tmp
+    Writable disposable /workspace
+    Controlled Ansible metadata at /sandbox
+  end note
+  bwrap -> bwrap : verify no_new_privs; mark start
+  bwrap -> checker : execute checker argv
+  checker --> runner : bounded output + exit status
+  alt portable
+    runner -> bwrap : kill on timeout; reap PID 1 namespace
+    runner -> runner : verify process group and pipes closed
+  else strict
+    runner -> resources : stop whole cgroup and verify empty
+  end
+  alt termination verified
+    runner -> snapshots : delete snapshot
+    runner --> tools : PASS / FAIL / TIMEOUT / SANDBOX_ERROR
+  else termination unverified
+    runner -> snapshots : quarantine run directory
+    runner --> tools : SANDBOX_ERROR + quarantine path
+  end
+end
+@enduml

@@ -1,0 +1,47 @@
+@startuml
+left to right direction
+title Coding Agent 1.2.0 - Components and trust boundaries
+actor "User" as user
+cloud "Local LLM server\nllama.cpp / vLLM / Strata / Ollama" as llm
+package "Trusted host application: coding_agent.py" {
+  component "REPL / TerminalInput\ncommands, editing, history" as cli
+  component "Agent\nbounded model/tool loop" as agent
+  component "BackendManager / HttpClient\nmodel selection and JSON API" as backend
+  component "ToolRegistry / Workspace\nvalidated file capabilities" as tools
+  component "SkillRegistry\ncatalog and skill text resources" as skills
+  component "WorkspaceManager\ncopy, diff, apply, revert" as wm
+  component "StaticChecks / SandboxRunner\napproved execution only" as runner
+  component "ResourceController\nstrict mode: systemd + cgroup gate" as rc
+}
+folder "Original project\nread-only until explicit /apply" as original
+folder "Private state\nbaseline, tasks, backups, history" as state
+folder "Agent workspace\nisolated writable session copy" as copy
+package "Disposable check isolation\nno network, fake HOME, private /tmp" {
+  folder "Fresh project snapshot\nmounted at /workspace" as snapshot
+  folder "Trusted Ansible metadata\nread-only /sandbox" as metadata
+  component "Checker / project plugins\nuntrusted execution" as checker
+}
+user --> cli : commands / tasks
+cli --> agent
+agent --> backend
+backend <--> llm : model discovery / chat
+agent --> tools : structured tool calls
+cli --> wm : user-only /apply, /revert, /discard
+wm --> original : read / confirmed writes
+wm --> state : initial baseline + manifest
+wm --> copy : create / restore copy
+tools --> copy : safe file operations
+agent --> skills : brief catalog / explicit $name
+tools --> skills : list_skills / read_skill
+skills --> copy : .agents/skills, read only
+agent --> state : task persistence via BackupManager
+cli --> state : per-project history
+tools --> runner : semantic check + targets
+runner --> rc : strict mode only
+runner --> checker : portable: process limits + bubblewrap
+runner --> snapshot : copy and cleanup
+runner --> metadata : controlled inventory / config
+rc --> checker : strict: aggregate limits + bubblewrap
+snapshot --> checker : disposable files
+metadata --> checker : Ansible checks only
+@enduml

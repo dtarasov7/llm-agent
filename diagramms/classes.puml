@@ -1,0 +1,125 @@
+@startuml
+hide empty members
+title Coding Agent 1.2.0 - Core class responsibilities
+class REPL {
+  commands: CommandRegistry
+  terminal: TerminalInput
+  edit(argument)
+  apply(argument)
+  check(argument)
+}
+class TerminalInput {
+  setup()
+  complete(text, state)
+  read(prompt)
+}
+class TaskEditor {
+  history
+  lines
+  handle(key)
+  show()
+}
+class CommandRegistry {
+  resolve(prefix)
+  execute(line)
+}
+class SkillRegistry {
+  catalog()
+  read(name, path)
+}
+class Agent {
+  task: Task
+  start(goal)
+  run(steps)
+  validation_problem()
+}
+class Task {
+  messages
+  revision
+  checks
+  token_totals
+}
+class BackendManager {
+  model
+  context_limit()
+  apply_profile(name)
+  parameters()
+}
+class Backend
+class OpenAICompatibleBackend
+class LlamaCppBackend
+class VLLMBackend
+class StrataBackend
+class OllamaBackend
+class HttpClient {
+  request(endpoint, payload, timeout)
+}
+class ToolRegistry {
+  execute(name, arguments)
+  run_check(name, targets, timeout)
+}
+class Workspace {
+  resolve(path, write)
+  read(path, limit)
+}
+class WorkspaceManager {
+  original: Workspace
+  workspace: Workspace
+  apply(approve)
+  revert()
+  load_for_task(saved_workspace)
+}
+class BackupManager {
+  remember(task, path, original)
+  save(task)
+  restore()
+}
+class StaticChecks {
+  recommendations(changed)
+  prepare_ansible(snapshot, target, syntax, executable)
+  run(name, targets, timeout)
+}
+class SandboxRunner {
+  run_check(name, command, timeout, prepare)
+  run_snapshot(name, command, snapshot, timeout)
+}
+class SnapshotManager {
+  snapshot()
+}
+class ResourceController {
+  command(argv, unit, timeout, record)
+  stop(unit, record)
+}
+REPL *-- CommandRegistry
+REPL *-- TerminalInput
+REPL --> TaskEditor : opens modal
+REPL --> SkillRegistry : /skills
+Agent --> SkillRegistry : catalog and explicit skills
+ToolRegistry --> SkillRegistry : list_skills / read_skill
+SkillRegistry --> Workspace : confined reads
+REPL --> Agent
+Agent *-- Task
+Agent --> BackendManager
+BackendManager --> Backend
+Backend <|-- OpenAICompatibleBackend
+OpenAICompatibleBackend <|-- LlamaCppBackend
+OpenAICompatibleBackend <|-- VLLMBackend
+OpenAICompatibleBackend <|-- StrataBackend
+OpenAICompatibleBackend <|-- OllamaBackend
+OpenAICompatibleBackend *-- HttpClient
+Agent --> ToolRegistry
+Agent --> BackupManager
+Agent --> WorkspaceManager
+ToolRegistry --> Workspace
+ToolRegistry --> StaticChecks
+ToolRegistry --> SandboxRunner
+WorkspaceManager --> Workspace : original and session capabilities
+StaticChecks --> Workspace
+StaticChecks --> SandboxRunner
+SandboxRunner *-- SnapshotManager
+SandboxRunner *-- ResourceController
+note bottom of WorkspaceManager
+Only user-confirmed apply creates
+an original-write capability.
+end note
+@enduml

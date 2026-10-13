@@ -1,0 +1,40 @@
+@startuml
+title Coding Agent 1.2.0 - Bounded model and tool iteration
+start
+:Select model and create Task;
+:Load root AGENTS.md as constrained project instructions;
+:Persist task and initial messages;
+while (Response budget remains?) is (yes)
+  :Request chat completion with tool schemas;
+  :Normalize response and record token usage;
+  if (Structured tool calls?) then (yes)
+    :Check tool budget and repeated-call threshold;
+    if (Limit reached?) then (yes)
+      :Mark LIMIT and persist;
+      stop
+    else (no)
+      :Validate arguments and dispatch trusted handlers;
+      :Append tool results and persist task;
+    endif
+  else (no)
+    if (Empty or truncated answer?) then (yes)
+      :Ask model to continue the incomplete answer;
+    else (no)
+      :Inspect checks for current revision;
+      if (SANDBOX_ERROR present?) then (yes)
+        :Mark BLOCKED; explain infrastructure failure;
+        stop
+      else (no)
+        if (Missing checks or actual validation failure?) then (yes)
+          :Request appropriate checks or diagnostic fixes;
+        else (no)
+          :Mark COMPLETED; print actual statuses and diff;
+          stop
+        endif
+      endif
+    endif
+  endif
+endwhile (no)
+:Mark LIMIT; offer /continue;
+stop
+@enduml

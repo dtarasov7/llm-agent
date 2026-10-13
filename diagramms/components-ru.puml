@@ -1,0 +1,47 @@
+@startuml
+left to right direction
+title Coding Agent 1.2.0 — Компоненты и границы доверия
+actor "Пользователь" as user
+cloud "Локальный сервер LLM\nllama.cpp / vLLM / Strata / Ollama" as llm
+package "Доверенное приложение хоста: coding_agent.py" {
+  component "REPL / TerminalInput\nкоманды, редактирование, история" as cli
+  component "Agent\nограниченный цикл модели и инструментов" as agent
+  component "BackendManager / HttpClient\nвыбор модели и JSON API" as backend
+  component "ToolRegistry / Workspace\nпроверенный доступ к файлам" as tools
+  component "SkillRegistry\nкаталог и текстовые ресурсы навыков" as skills
+  component "WorkspaceManager\nкопия, различия, перенос, восстановление" as wm
+  component "StaticChecks / SandboxRunner\nтолько разрешённый запуск" as runner
+  component "ResourceController\nстрогий режим: systemd + проверка cgroup" as rc
+}
+folder "Исходный проект\nтолько чтение до явного /apply" as original
+folder "Закрытое состояние\nбаза, задачи, резервные копии, история" as state
+folder "Рабочая копия агента\nизолированная изменяемая копия сеанса" as copy
+package "Временная изоляция проверки\nбез сети, фиктивный HOME, закрытый /tmp" {
+  folder "Свежий снимок проекта\nсмонтирован в /workspace" as snapshot
+  folder "Доверенные метаданные Ansible\n/sandbox только для чтения" as metadata
+  component "Проверка / плагины проекта\nнедоверенное выполнение" as checker
+}
+user --> cli : команды / задачи
+cli --> agent
+agent --> backend
+backend <--> llm : получение моделей / чат
+agent --> tools : структурированные вызовы инструментов
+cli --> wm : команды пользователя /apply, /revert, /discard
+wm --> original : чтение / подтверждённая запись
+wm --> state : начальная база + манифест
+wm --> copy : создание / восстановление копии
+tools --> copy : безопасные операции с файлами
+agent --> skills : краткий каталог / явное $имя
+tools --> skills : list_skills / read_skill
+skills --> copy : .agents/skills, только чтение
+agent --> state : сохранение задачи через BackupManager
+cli --> state : история по проектам
+tools --> runner : имя проверки + цели
+runner --> rc : только строгий режим
+runner --> checker : переносимый режим: лимиты процесса + bubblewrap
+runner --> snapshot : копирование и очистка
+runner --> metadata : контролируемые inventory / config
+rc --> checker : строгий режим: общие лимиты + bubblewrap
+snapshot --> checker : временные файлы
+metadata --> checker : только проверки Ansible
+@enduml

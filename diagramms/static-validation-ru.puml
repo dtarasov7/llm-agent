@@ -1,0 +1,38 @@
+@startuml
+title Coding Agent 1.2.0 — Выбор и запуск статических проверок
+start
+:Проверка изменённых путей и текстовых shebang;
+if (Shebang Bash либо .sh без shebang POSIX sh?) then (да)
+  :Рекомендация bash_syntax, затем shellcheck;
+elseif (Shebang POSIX sh?) then (да)
+  :Рекомендация только shellcheck;
+elseif (Распознан playbook либо файл роли Ansible?) then (да)
+  :Использование пути playbook либо каталога родительской роли;
+  :Рекомендация ansible_syntax, затем ansible_lint;
+else (несвязанный файл)
+  :Нет автоматической рекомендации статических проверок;
+  stop
+endif
+:Получение имени run_check и относительных целей;
+if (Цели прошли безопасную проверку?) then (нет)
+  :Возврат INVALID_TARGET без выполнения;
+  stop
+else (да)
+  if (Доверенная утилита установлена?) then (нет)
+    :Возврат SKIPPED; зависимости не устанавливаются;
+    stop
+  else (да)
+    :Фиксированные аргументы; для синтаксиса роли закрытый wrapper;
+    :Выполнение через SandboxRunner в свежем снимке;
+    :Сохранение диагностики и точного статуса;
+    note right
+      bash -n и синтаксис Ansible: отдельный запуск для каждой цели
+      ShellCheck: один процесс для проверенных файлов, без -x
+      Ansible: искусственный inventory, контролируемая конфигурация, автономный lint
+      SKIPPED и SANDBOX_ERROR не означают PASS
+      Статические результаты не доказывают выполнение или converge
+    end note
+  endif
+endif
+stop
+@enduml

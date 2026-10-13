@@ -1,0 +1,48 @@
+@startuml
+title Coding Agent — Жизненный цикл проверки в изоляции
+participant "ToolRegistry / StaticChecks" as tools
+participant "SandboxRunner" as runner
+participant "SnapshotManager" as snapshots
+participant "ResourceController" as resources
+participant "Переносимая / строгая проверка хоста" as gate
+participant "bubblewrap / внутренняя проверка" as bwrap
+participant "Проверка + плагины проекта" as checker
+tools -> runner : разрешённые аргументы + таймаут
+runner -> runner : проверка условий выбранного режима
+alt изоляция недоступна
+  runner --> tools : SANDBOX_ERROR / CHECK_NOT_RUN
+else условия доступны
+  runner -> snapshots : создание временной копии проекта
+  snapshots --> runner : закрытый путь снимка
+  alt переносимый режим (по умолчанию)
+    runner -> gate : процесс Python -I -S с чистым окружением
+    gate -> gate : no_new_privs + лимиты отдельного процесса
+  else строгий режим
+    runner -> resources : очищенная служба systemd пользователя
+    resources -> gate : фиксированный запуск Python -I -S
+    gate -> gate : проверка лимитов cgroup + no_new_privs
+  end
+  gate -> bwrap : отдельные пространства имён и системные пути только для чтения
+  note right of bwrap
+    Отдельные PID, user, сеть, HOME и /tmp
+    Изменяемый временный /workspace
+    Контролируемые данные Ansible в /sandbox
+  end note
+  bwrap -> bwrap : проверка no_new_privs; запись маркера
+  bwrap -> checker : запуск проверки списком аргументов
+  checker --> runner : ограниченный вывод + код завершения
+  alt переносимый режим
+    runner -> bwrap : остановка по таймауту; завершение пространства PID 1
+    runner -> runner : проверка группы процессов и каналов вывода
+  else строгий режим
+    runner -> resources : остановка всей cgroup и проверка пустоты
+  end
+  alt остановка подтверждена
+    runner -> snapshots : удаление снимка
+    runner --> tools : PASS / FAIL / TIMEOUT / SANDBOX_ERROR
+  else остановка не подтверждена
+    runner -> snapshots : карантин каталога запуска
+    runner --> tools : SANDBOX_ERROR + путь карантина
+  end
+end
+@enduml
